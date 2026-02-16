@@ -54,216 +54,32 @@
 - Final artifact: `output/linux-64/maya-2026.0-hb0f4dca_0.conda` (3.90 GiB)
 - Cleaned stale broken/ artifact from killed build
 - **Status: DONE** — package builds reproducibly and passes all tests
-## Iteration 9 — Patching & bundling analysis
 
-### Bundled system libraries (95 bundled, 42 skipped)
+## Iteration 9 — Runtime fixes + first successful render
 
-Our `build_maya.sh` copies system .so files from the build host into `opt/autodesk/maya2026/lib/`
-so the package is self-contained. 138 libs are listed in the SYSTEM_LIBS array; 95 were found
-on the headless build host and bundled, 42 were not present (optional plugin deps).
+### Problems identified
+1. Missing `maya` symlink in Maya's bin dir — only `maya2026` exists. The RPM post-install normally creates `maya -> maya2026` but our extract skipped it. `render.bin` internally launches `maya` to start the full Maya process, so this symlink is required.
+2. Five runtime libs missing from the package because they weren't on the headless build host: `libva.so.2`, `libva-drm.so.2`, `libva-x11.so.2`, `libvdpau.so.1`, `libxkbfile.so.1`
 
-#### DNF packages providing the bundled libs
+### Fixes applied
+- Installed `libva`, `libvdpau`, `libxkbfile` via dnf on the build host so they get bundled
+- Added symlink creation to `scripts/build_maya.sh`: `ln -sf maya2026 $MAYA_BIN/maya`
+- Bumped build number to 1 in `recipe/recipe.yaml` (hash unchanged, conda needs a new build number to actually reinstall)
 
-```
-alsa-lib            bzip2-libs          cairo               dbus-libs
-expat               fontconfig          freetype            glib2
-graphite2           harfbuzz            jbigkit-libs        keyutils-libs
-krb5-libs           libICE              libSM               libX11
-libX11-xcb          libXau              libXcomposite       libXdamage
-libXext             libXfixes           libXi               libXinerama
-libXmu              libXpm              libXrandr           libXrender
-libXt               libXtst             libXv               libXxf86vm
-libattr             libblkid            libbrotli           libcap
-libcom_err          libcurl-minimal     libdrm              libffi
-libglvnd            libglvnd-glx        libglvnd-opengl     libgomp
-libidn2             libjpeg-turbo       libmount            libnghttp2
-libpng              libpsl              libselinux          libtiff
-libtool-ltdl        libunistring        libuuid             libwayland-client
-libwebp             libxcb              libxkbcommon         libxml2
-libzstd             mesa-libGLU         ncurses-libs        nspr
-nss                 nss-util            openssl-libs        pciutils-libs
-pcre2               pixman              systemd-libs        xz-libs
-```
+### Rebuild
+- Cleaned /tmp and old output, rebuilt with rattler-build
+- 103 system libs bundled (up from 95), 35 skipped (down from 42)
+- `maya` symlink confirmed in package
+- All 5 previously-missing libs now present in `lib/`
+- Package: `output/linux-64/maya-2026.0-hb0f4dca_1.conda`
+- package_contents test: all passed
 
-#### Bundled .so files (95 found on build host)
+### Render test
+- Installed new package into maya-test env
+- `conda run -n maya-test maya-render -r sw -x 1280 -y 720 -rd /home/ssm-user/conda/render /home/ssm-user/conda/fallinggears.ma`
+- Render completed in ~5 seconds, exit 0
+- Output: `render/fallinggears.png` — 1280×720 RGBA PNG, 645 KB
+- Note: `-rd` path must be absolute; relative paths resolve against Maya's default project (`~/maya/projects/default/`)
+- CER warning about `/var/lib/Autodesk/CER` is cosmetic (no crash reporting service needed)
+- **Status: DONE** — conda-packaged Maya 2026 renders successfully
 
-```
-libEGL.so.1  libGL.so.1  libGLU.so.1  libGLX.so.0  libGLdispatch.so.0
-libOpenGL.so.0  libICE.so.6  libSM.so.6
-libX11.so.6  libX11-xcb.so.1  libXau.so.6  libXcomposite.so.1  libXdamage.so.1
-libXext.so.6  libXfixes.so.3  libXi.so.6  libXinerama.so.1  libXmu.so.6
-libXpm.so.4  libXrandr.so.2  libXrender.so.1  libXt.so.6  libXtst.so.6
-libXv.so.1  libXxf86vm.so.1
-libxcb.so.1  libxcb-glx.so.0  libxcb-randr.so.0  libxcb-render.so.0
-libxcb-shape.so.0  libxcb-shm.so.0  libxcb-sync.so.1  libxcb-xfixes.so.0
-libxcb-xkb.so.1  libxkbcommon.so.0
-libcairo.so.2  libdrm.so.2  libfontconfig.so.1  libfreetype.so.6
-libpng16.so.16  libjpeg.so.62  libtiff.so.5
-libglib-2.0.so.0  libgmodule-2.0.so.0  libgobject-2.0.so.0
-libgio-2.0.so.0  libgthread-2.0.so.0
-libasound.so.2
-libcrypto.so.3  libssl.so.3  libcurl.so.4  libgssapi_krb5.so.2
-libnss3.so  libnspr4.so  libnssutil3.so  libsmime3.so  libplc4.so  libplds4.so
-libdbus-1.so.3  libexpat.so.1  libxml2.so.2
-libbz2.so.1  libzstd.so.1  libgomp.so.1
-libattr.so.1  libcap.so.2  libltdl.so.7  libuuid.so.1  libpci.so.3
-libncurses.so.6  libtinfo.so.6  libwayland-client.so.0
-libharfbuzz.so.0  libffi.so.8  liblzma.so.5  libbrotlidec.so.1
-libpcre2-8.so.0  libpixman-1.so.0  libpsl.so.5  libselinux.so.1
-libsystemd.so.0  libwebp.so.7  libblkid.so.1  libbrotlicommon.so.1
-libgraphite2.so.3  libunistring.so.2  libcom_err.so.2
-libidn2.so.0  libjbig.so.2.1  libk5crypto.so.3  libkeyutils.so.1
-libkrb5.so.3  libkrb5support.so.0  libmount.so.1  libnghttp2.so.14
-libXau.so.6  libGLdispatch.so.0
-```
-
-#### Skipped .so files (42 — not on headless build host, all optional)
-
-```
-libXaw.so.7  libXft.so.2  libXp.so.6  libatk-1.0.so.0  libcups.so.2
-libgdk-x11-2.0.so.0  libgdk_pixbuf-2.0.so.0  libgtk-x11-2.0.so.0
-libpango-1.0.so.0  libpangocairo-1.0.so.0  libpangoft2-1.0.so.0
-libwayland-cursor.so.0  libwayland-egl.so.1
-libxcb-cursor.so.0  libxcb-icccm.so.4  libxcb-image.so.0
-libxcb-keysyms.so.1  libxcb-render-util.so.0
-libxkbcommon-x11.so.0  libxkbfile.so.1
-libva.so.2  libva-drm.so.2  libva-x11.so.2  libvdpau.so.1
-libpulse.so.0  libspeechd.so.2  librsvg-2.so.2  libpoppler-glib.so.4
-libgd.so.2  libgs.so.8  libgts-0.7.so.5  libmng.so.2  libpng12.so.0  libpq.so.5
-libgstallocators-1.0.so.0  libgstapp-1.0.so.0  libgstaudio-1.0.so.0
-libgstbase-1.0.so.0  libgstgl-1.0.so.0  libgstpbutils-1.0.so.0
-libgstreamer-1.0.so.0  libgstvideo-1.0.so.0
-```
-
-These would come from: `gtk2`, `gdk-pixbuf2`, `pango`, `atk`, `cups-libs`, `gstreamer1*`,
-`libva`, `libvdpau`, `pulseaudio-libs`, `speech-dispatcher`, `librsvg2`, `poppler-glib`,
-`gd`, `ghostscript`, `gts`, `libmng`, `libpng12`, `postgresql-libs`, `libwayland-cursor`,
-`libwayland-egl`, `libxcb` extras, `libxkbcommon-x11`, `libxkbfile`, `libXaw`, `libXft`, `libXp`.
-
-### Patching by rattler-build (patchelf 0.17.2)
-
-859 unique ELF binaries were relinked during the packaging phase:
-- 803 patched via patchelf (rpath prepend)
-- 59 had absolute build-farm rpaths stripped (no patchelf, rpath removal only)
-- 547 got "new value is longer than old value" warnings (non-fatal; rpath section too short to extend)
-
-#### What rattler-build does to rpaths
-
-It prepends a relative `$ORIGIN/../../...` path that resolves from the binary's location
-up to the conda prefix root. Absolute paths from Autodesk's build farm are stripped.
-Original `$ORIGIN`-relative paths are preserved.
-
-#### Absolute rpaths stripped (from Autodesk build farm)
-
-```
-/home/S/workspace/pyside_maya/external_dependencies/qt_6.5.3/lib
-/home/S/jenkins/workspace/maya/build/RelWithDebInfo/runTime/lib
-/local/S/jenkins/workspace/artifactory/Linux/fbxsdk/95328ca/lib/x64/release
-/local/S/workspace/pyside_maya/external_dependencies/libclang/lib
-/local/S/jenkins/workspace/3dsmax-conan-recipes@tmp/.conan/data/Imath/3.1.9/...
-/media/sf_D_DRIVE/git/adp-ipc/thirdParty/boost-linux.1.8.0/lib
-```
-
-#### Rpath diff (representative samples)
-
-| Binary | Original (RPM) | Patched (conda) |
-|--------|---------------|-----------------|
-| `maya.bin` | `$ORIGIN/../lib` | `$ORIGIN/../../../../lib:$ORIGIN/../lib` |
-| `libMaya.so` | `$ORIGIN:$ORIGIN/../lib` | `$ORIGIN/../../../../lib:$ORIGIN:$ORIGIN/../lib` |
-| `libFoundation.so` | `$ORIGIN` | `$ORIGIN/../../../../lib:$ORIGIN` |
-| `fbxmaya.so` | `/local/.../fbxsdk/.../release:/home/.../runTime/lib` | `$ORIGIN/../../../../../../lib` |
-| `QtCore.abi3.so` | `$ORIGIN/:/home/.../qt_6.5.3/lib` | `$ORIGIN/../../../../../../../lib:$ORIGIN/` |
-
-The `$ORIGIN/../../../../lib` prefix resolves to the conda prefix `lib/` directory from
-`opt/autodesk/maya2026/bin/`. Deeper binaries (e.g. PySide6 in `lib/python3.11/site-packages/`)
-get longer relative paths like `$ORIGIN/../../../../../../../lib`.
-
-For the 547 binaries where patchelf couldn't extend the rpath, the wrapper scripts in
-`$PREFIX/bin/{maya,mayapy,maya-render}` set `LD_LIBRARY_PATH` as a fallback.
-
-## Iteration 10 — Comparison with Deadline Cloud sample (`samples/deadline-cloud-samples/conda_recipes/maya-2026/`)
-
-### Overview
-
-The sample targets Deadline Cloud service-managed fleets (which have many system libs pre-installed).
-Our build targets full self-containment for arbitrary conda environments.
-
-### Install layout
-- Sample: `$PREFIX/usr/autodesk/maya2026` (keeps RPM layout as-is)
-- Ours: `$PREFIX/opt/autodesk/maya2026` (relocated)
-
-### Patching strategy
-
-| Aspect | Sample | Ours |
-|--------|--------|------|
-| Who patches | Manual `patchelf` in build.sh | rattler-build automatic relinking |
-| rattler-build relinking | Disabled (`binary_relocation: False`, `ignore_binary_files: True`, `missing_dso_allowlist: ["**"]`) | Enabled (default) |
-| Scope | Targeted: only Python site-packages, lib-dynload, downloaded .so files, and libs with empty rpath | All 859 ELF binaries |
-| Approach | `patchelf --add-rpath '$ORIGIN/../..'` on specific globs | Prepends `$ORIGIN/../../../../lib` (relative to conda prefix) |
-| patchelf as dep | Declared in `requirements.build` | Not declared; relies on build-env PATH |
-| Warnings | None (targeted patching avoids "too short" issue) | 547 "new value is longer than old value" (non-fatal) |
-
-The sample's approach is better for this use case: by disabling rattler-build's automatic relinking and doing targeted manual patching, it avoids the 547 patchelf warnings and only touches binaries that actually need rpath fixes. It also avoids `LD_LIBRARY_PATH` entirely, which is the conda best practice.
-
-### Bundled libraries
-
-Our 72 dnf packages are a strict superset of the sample's 14. The sample's 14 are a subset of ours.
-
-In both (7 packages):
-```
-alsa-lib  fontconfig  freetype  graphite2  harfbuzz  libbrotli  pciutils-libs
-```
-
-Only in sample (7 packages) — these are in our SYSTEM_LIBS array as skipped/NOT_FOUND:
-```
-libva  libvdpau  libxkbcommon-x11  libxkbfile  xcb-util-cursor  xcb-util-keysyms  xcb-util-wm
-```
-The sample uses `dnf download --resolve` to fetch these at build time even though they're not
-on the build host. Our build just skips them. This is a gap — we should adopt `dnf download`
-for these 7 packages.
-
-Only in ours (65 packages) — not bundled by the sample because Deadline Cloud fleets have them:
-```
-bzip2-libs  cairo  dbus-libs  expat  glib2  jbigkit-libs  keyutils-libs  krb5-libs
-libICE  libSM  libX11  libX11-xcb  libXau  libXcomposite  libXdamage  libXext
-libXfixes  libXi  libXinerama  libXmu  libXpm  libXrandr  libXrender  libXt
-libXtst  libXv  libXxf86vm  libattr  libblkid  libcap  libcom_err  libcurl-minimal
-libdrm  libffi  libglvnd  libglvnd-glx  libglvnd-opengl  libgomp  libidn2
-libjpeg-turbo  libmount  libnghttp2  libpng  libpsl  libselinux  libtiff
-libtool-ltdl  libunistring  libuuid  libwayland-client  libwebp  libxcb
-libxkbcommon  libxml2  libzstd  mesa-libGLU  ncurses-libs  nspr  nss  nss-util
-openssl-libs  pcre2  pixman  systemd-libs  xz-libs
-```
-
-### Features in sample that we lack
-
-1. **Licensing setup** — extracts `ProductInformation.pit`, creates `AdlmThinClientCustomEnv.xml`,
-   sets `AUTODESK_ADLM_THINCLIENT_ENV` and `MAYA_LEGACY_THINCLIENT` env vars
-2. **Conda activation/deactivation scripts** — sets `MAYA_LOCATION`, `MAYA_VERSION`, `MAYA_NO_HOME`,
-   `MAYA_MODULE_PATH` via `etc/conda/activate.d/` instead of wrapper scripts
-3. **No LD_LIBRARY_PATH** — uses symlinks + rpath only (conda best practice)
-4. **`dnf download --resolve`** — fetches missing libs at build time instead of skipping them
-5. **Functional tests** — runs `mayapy --help`, `mayapy -c 'import maya.standalone...'`,
-   `maya -batch` instead of just structural rpath checks
-6. **patchelf as build requirement** — declared in recipe, not implicit
-7. **Removes Examples** — saves space by deleting `$MAYA_ROOT/Examples`
-8. **Uses `--resolve` flag** — `dnf download --resolve` pulls transitive deps automatically
-
-### Features in ours that sample lacks
-
-1. **Aggressive lib bundling** — 65 more system packages bundled for full self-containment
-2. **rpath verification test** — `check_rpath.sh` categorizes missing libs as critical vs optional
-3. **Dependency scanner** — `find_missing_deps.sh` for systematic analysis
-4. **Internal lib symlinks** — graphviz, PySide6, numpy libs symlinked into `lib/`
-5. **package_contents test** — verifies wrapper scripts and maya.bin exist
-
-### Recommendations for next iteration
-
-1. Adopt `dnf download --resolve` for the 7 missing packages (libva, libvdpau, etc.)
-2. Disable rattler-build auto-relinking (`binary_relocation: False`, `prefix_detection.ignore_binary_files: True`, `missing_dso_allowlist: ["**"]`)
-3. Do targeted manual patchelf like the sample
-4. Replace wrapper scripts with conda activation scripts + symlinks
-5. Add licensing setup (ProductInformation.pit + AdlmThinClientCustomEnv.xml)
-6. Add functional tests (mayapy, maya -batch)
-7. Declare patchelf as a build requirement
-8. Remove Examples directory to save space

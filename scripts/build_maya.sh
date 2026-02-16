@@ -155,7 +155,16 @@ for nplib in libgfortran-040039e1.so.5.0.0 libquadmath-96973f99.so.0.0.0; do
     fi
 done
 
-# 3. Create wrapper scripts
+# 3. Create the `maya` symlink in Maya's own bin dir
+# The RPM normally creates this, but our extract missed it.
+# Maya's Render script (and render.bin internally) looks for $MAYA_LOCATION/bin/maya
+# to start the Maya process.
+if [[ ! -e "$MAYA_BIN/maya" ]]; then
+    echo "Creating maya -> maya2026 symlink in $MAYA_BIN"
+    ln -sf maya2026 "$MAYA_BIN/maya"
+fi
+
+# 4. Create wrapper scripts
 echo "Creating wrapper scripts..."
 mkdir -p "$PREFIX/bin"
 
