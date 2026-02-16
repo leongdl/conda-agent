@@ -1,0 +1,40 @@
+context:
+  version: "2026.0"
+  build_number: 0
+
+package:
+  name: maya
+  version: ${{ version }}
+
+source:
+  - path: ../maya
+
+build:
+  number: ${{ build_number }}
+  script:
+    - if: unix
+      then:
+        - bash ${RECIPE_DIR}/../scripts/build_maya.sh
+
+requirements: {}
+
+tests:
+  - script:
+      - bash ./check_rpath.sh ${PREFIX}
+    files:
+      recipe:
+        - check_rpath.sh
+  - package_contents:
+      bin:
+        - maya
+        - mayapy
+        - maya-render
+      files:
+        - opt/autodesk/maya2026/bin/maya.bin
+
+about:
+  summary: Autodesk Maya 2026 repackaged as a conda package
+  license: LicenseRef-Autodesk-Maya
+  description: |
+    Maya 2026 packaged for conda with all shared library dependencies
+    bundled for self-sufficient operation within a conda environment.
