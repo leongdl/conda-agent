@@ -105,3 +105,20 @@ Benefits:
 - No YAML quoting/escaping issues with special characters
 - Scripts get proper syntax highlighting in editors
 - Simpler diffs when build logic changes
+
+
+## Package Manager (dnf/yum)
+
+### Never Run dnf in Parallel
+
+dnf uses a system-wide lock file. Running multiple `dnf` or `yum` commands concurrently (including via sub-agents) will deadlock. Always run them sequentially, one at a time, waiting for each to complete before starting the next.
+
+```bash
+# Good — sequential
+sudo dnf install -y libva
+sudo dnf install -y libvdpau
+sudo dnf install -y libxkbfile
+
+# Bad — parallel or batched via sub-agents
+# These will deadlock on /var/run/dnf.lock
+```
