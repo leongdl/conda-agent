@@ -38,7 +38,7 @@ SYSTEM_LIBS=(
     libXt.so.6 libXtst.so.6 libXv.so.1 libXxf86vm.so.1
     libxcb.so.1 libxcb-glx.so.0 libxcb-randr.so.0 libxcb-render.so.0
     libxcb-shape.so.0 libxcb-shm.so.0 libxcb-sync.so.1
-    libxcb-xfixes.so.0 libxcb-xkb.so.1
+    libxcb-xfixes.so.0 libxcb-xkb.so.1 libxcb-dri3.so.0
     libxkbcommon.so.0
     # Graphics
     libcairo.so.2 libdrm.so.2
@@ -113,6 +113,21 @@ for lib in "${SYSTEM_LIBS[@]}"; do
     fi
 done
 echo "Bundled $BUNDLED system libs, skipped $SKIPPED"
+
+# 2b. Copy pre-downloaded RPM-extracted libs (for libs not available on build host)
+EXTRA_LIBS_DIR="$SRC_DIR/extra-libs"
+if [[ -d "$EXTRA_LIBS_DIR" ]]; then
+    echo "Copying pre-downloaded extra libs from $EXTRA_LIBS_DIR ..."
+    EXTRA_COPIED=0
+    for f in "$EXTRA_LIBS_DIR"/*.so*; do
+        BASENAME=$(basename "$f")
+        if [[ ! -f "$MAYA_LIB/$BASENAME" && ! -L "$MAYA_LIB/$BASENAME" ]]; then
+            cp -a "$f" "$MAYA_LIB/$BASENAME"
+            EXTRA_COPIED=$((EXTRA_COPIED + 1))
+        fi
+    done
+    echo "Copied $EXTRA_COPIED extra libs from RPM downloads"
+fi
 
 # 3. Symlink internal libs that exist in the package but aren't found due to deep rpath
 echo "Creating symlinks for internal libs with deep rpaths..."
