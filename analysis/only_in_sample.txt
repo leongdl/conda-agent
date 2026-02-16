@@ -1,0 +1,7 @@
+libva
+libvdpau
+libxkbcommon-x11
+libxkbfile
+xcb-util-cursor
+xcb-util-keysyms
+xcb-util-wm

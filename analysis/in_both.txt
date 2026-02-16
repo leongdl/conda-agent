@@ -1,0 +1,7 @@
+alsa-lib
+fontconfig
+freetype
+graphite2
+harfbuzz
+libbrotli
+pciutils-libs

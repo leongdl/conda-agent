@@ -180,3 +180,90 @@ get longer relative paths like `$ORIGIN/../../../../../../../lib`.
 
 For the 547 binaries where patchelf couldn't extend the rpath, the wrapper scripts in
 `$PREFIX/bin/{maya,mayapy,maya-render}` set `LD_LIBRARY_PATH` as a fallback.
+
+## Iteration 10 — Comparison with Deadline Cloud sample (`samples/deadline-cloud-samples/conda_recipes/maya-2026/`)
+
+### Overview
+
+The sample targets Deadline Cloud service-managed fleets (which have many system libs pre-installed).
+Our build targets full self-containment for arbitrary conda environments.
+
+### Install layout
+- Sample: `$PREFIX/usr/autodesk/maya2026` (keeps RPM layout as-is)
+- Ours: `$PREFIX/opt/autodesk/maya2026` (relocated)
+
+### Patching strategy
+
+| Aspect | Sample | Ours |
+|--------|--------|------|
+| Who patches | Manual `patchelf` in build.sh | rattler-build automatic relinking |
+| rattler-build relinking | Disabled (`binary_relocation: False`, `ignore_binary_files: True`, `missing_dso_allowlist: ["**"]`) | Enabled (default) |
+| Scope | Targeted: only Python site-packages, lib-dynload, downloaded .so files, and libs with empty rpath | All 859 ELF binaries |
+| Approach | `patchelf --add-rpath '$ORIGIN/../..'` on specific globs | Prepends `$ORIGIN/../../../../lib` (relative to conda prefix) |
+| patchelf as dep | Declared in `requirements.build` | Not declared; relies on build-env PATH |
+| Warnings | None (targeted patching avoids "too short" issue) | 547 "new value is longer than old value" (non-fatal) |
+
+The sample's approach is better for this use case: by disabling rattler-build's automatic relinking and doing targeted manual patching, it avoids the 547 patchelf warnings and only touches binaries that actually need rpath fixes. It also avoids `LD_LIBRARY_PATH` entirely, which is the conda best practice.
+
+### Bundled libraries
+
+Our 72 dnf packages are a strict superset of the sample's 14. The sample's 14 are a subset of ours.
+
+In both (7 packages):
+```
+alsa-lib  fontconfig  freetype  graphite2  harfbuzz  libbrotli  pciutils-libs
+```
+
+Only in sample (7 packages) — these are in our SYSTEM_LIBS array as skipped/NOT_FOUND:
+```
+libva  libvdpau  libxkbcommon-x11  libxkbfile  xcb-util-cursor  xcb-util-keysyms  xcb-util-wm
+```
+The sample uses `dnf download --resolve` to fetch these at build time even though they're not
+on the build host. Our build just skips them. This is a gap — we should adopt `dnf download`
+for these 7 packages.
+
+Only in ours (65 packages) — not bundled by the sample because Deadline Cloud fleets have them:
+```
+bzip2-libs  cairo  dbus-libs  expat  glib2  jbigkit-libs  keyutils-libs  krb5-libs
+libICE  libSM  libX11  libX11-xcb  libXau  libXcomposite  libXdamage  libXext
+libXfixes  libXi  libXinerama  libXmu  libXpm  libXrandr  libXrender  libXt
+libXtst  libXv  libXxf86vm  libattr  libblkid  libcap  libcom_err  libcurl-minimal
+libdrm  libffi  libglvnd  libglvnd-glx  libglvnd-opengl  libgomp  libidn2
+libjpeg-turbo  libmount  libnghttp2  libpng  libpsl  libselinux  libtiff
+libtool-ltdl  libunistring  libuuid  libwayland-client  libwebp  libxcb
+libxkbcommon  libxml2  libzstd  mesa-libGLU  ncurses-libs  nspr  nss  nss-util
+openssl-libs  pcre2  pixman  systemd-libs  xz-libs
+```
+
+### Features in sample that we lack
+
+1. **Licensing setup** — extracts `ProductInformation.pit`, creates `AdlmThinClientCustomEnv.xml`,
+   sets `AUTODESK_ADLM_THINCLIENT_ENV` and `MAYA_LEGACY_THINCLIENT` env vars
+2. **Conda activation/deactivation scripts** — sets `MAYA_LOCATION`, `MAYA_VERSION`, `MAYA_NO_HOME`,
+   `MAYA_MODULE_PATH` via `etc/conda/activate.d/` instead of wrapper scripts
+3. **No LD_LIBRARY_PATH** — uses symlinks + rpath only (conda best practice)
+4. **`dnf download --resolve`** — fetches missing libs at build time instead of skipping them
+5. **Functional tests** — runs `mayapy --help`, `mayapy -c 'import maya.standalone...'`,
+   `maya -batch` instead of just structural rpath checks
+6. **patchelf as build requirement** — declared in recipe, not implicit
+7. **Removes Examples** — saves space by deleting `$MAYA_ROOT/Examples`
+8. **Uses `--resolve` flag** — `dnf download --resolve` pulls transitive deps automatically
+
+### Features in ours that sample lacks
+
+1. **Aggressive lib bundling** — 65 more system packages bundled for full self-containment
+2. **rpath verification test** — `check_rpath.sh` categorizes missing libs as critical vs optional
+3. **Dependency scanner** — `find_missing_deps.sh` for systematic analysis
+4. **Internal lib symlinks** — graphviz, PySide6, numpy libs symlinked into `lib/`
+5. **package_contents test** — verifies wrapper scripts and maya.bin exist
+
+### Recommendations for next iteration
+
+1. Adopt `dnf download --resolve` for the 7 missing packages (libva, libvdpau, etc.)
+2. Disable rattler-build auto-relinking (`binary_relocation: False`, `prefix_detection.ignore_binary_files: True`, `missing_dso_allowlist: ["**"]`)
+3. Do targeted manual patchelf like the sample
+4. Replace wrapper scripts with conda activation scripts + symlinks
+5. Add licensing setup (ProductInformation.pit + AdlmThinClientCustomEnv.xml)
+6. Add functional tests (mayapy, maya -batch)
+7. Declare patchelf as a build requirement
+8. Remove Examples directory to save space
